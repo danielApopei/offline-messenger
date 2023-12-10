@@ -4,6 +4,7 @@
 #define PASSWORD_LENGTH 32
 #define ID_LENGTH 16
 #define CONTENT_LENGTH 64
+#define TIMESTAMP_LENGTH 32
 
 struct User {
     char username[USERNAME_LENGTH];
@@ -15,16 +16,22 @@ struct Message {
     char sender[USERNAME_LENGTH];
     char receiver[USERNAME_LENGTH];
     char content[CONTENT_LENGTH];
+    char timeStamp[TIMESTAMP_LENGTH];
     char replyId[ID_LENGTH]; // optional, only if this message is replying to another one
+    char isDeleted[ID_LENGTH];
 };
 
 enum PacketType {
+    EMPTY,
+    REGISTER,
+    REGISTER_RESPONSE,
     LOGIN, // server will analyze the User part of the Packet it receives from client
     LOGIN_RESPONSE,
     LOGOUT,
     LOGOUT_RESPONSE,
     SEND_MESSAGE,  // server will analyze the Message part of the Packet it receives from client
     SEND_MESSAGE_RESPONSE,
+    MESSAGE_NOTIFICATION,
     VIEW_ALL_CONVOS,
     VIEW_ALL_CONVOS_RESPONSE,  // client will analyze the User part of the Packet it receives from server
     VIEW_CONVERSATION,
@@ -33,7 +40,9 @@ enum PacketType {
 
 enum ErrorType {
     SUCCESS,
+    USER_ALREADY_EXISTS,
     INVALID_USER_DATA, // inexistent user or wrong password
+    USER_ALREADY_CONNECTED,
     NOT_LOGGED_IN, // when user tries to send message or log out, but it is not logged in the first place
     NOT_LOGGED_OUT, // when user tries to login, but they are already logged in
     INVALID_REPLY_ID // for when the user tries to respond to an inexistent message
@@ -46,8 +55,16 @@ struct Packet {
     Message message;
 };
 
+enum ViewType {
+    LOGIN_VIEW,
+    MAIN_VIEW,
+    CONVERSATION_VIEW
+};
+
 // STRUCTURES USED BY SERVER
 struct Connection {
     int sd;
     char username[USERNAME_LENGTH];
+    ViewType currentView;
+    char viewingConvo[USERNAME_LENGTH];
 }; // server will manage an array of type Connection through which it will know how many clients are connected and with what users
