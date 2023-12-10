@@ -126,17 +126,34 @@ void* userInputThread(void* arg) {
             } else if (strcmp(params[0], "send") == 0) {
                 userPacket.type = SEND_MESSAGE;
                 if(paramCount < 3) {
-                    printf("syntax: send <message>");
+                    printf("syntax: send <user> <content>");
                     okToSend = 0;
                 } else {
+                    strcpy(userPacket.message.replyId, "");
                     strcpy(userPacket.message.receiver, params[1]);
                     strcpy(userPacket.message.content, params[2]);
+
                     for(int i=3;i<paramCount;i++)
                     {
                         strcat(userPacket.message.content, " ");
                         strcat(userPacket.message.content, params[i]);
                     }
                     printf("client sending: %s\n", params[2]);
+                }
+            } else if (strcmp(params[0], "reply") == 0) {
+                userPacket.type = SEND_MESSAGE;
+                if(paramCount < 4) {
+                    printf("syntax: reply <user> <messageId> <content>");
+                    okToSend = 0;
+                } else {
+                    strcpy(userPacket.message.replyId, params[1]);
+                    strcpy(userPacket.message.receiver, params[2]);
+                    strcpy(userPacket.message.content, params[3]);
+                    for(int i=4;i<paramCount;i++)
+                    {
+                        strcat(userPacket.message.content, " ");
+                        strcat(userPacket.message.content, params[i]);
+                    }
                 }
             } else if (strcmp(params[0], "viewallconvos") == 0) {
                 userPacket.type = VIEW_ALL_CONVOS;

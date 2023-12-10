@@ -274,7 +274,6 @@ int main() {
                                 int rc = sqlite3_prepare_v2(db, checkUserQuery, -1, &checkUserStmt, NULL);
                                 handleDbError(rc, "Failed to prepare SQL statement for checking user existence");
 
-                                printf("who am I checking for: %s\n", receivedPacket.message.receiver);
                                 rc = sqlite3_bind_text(checkUserStmt, 1, receivedPacket.message.receiver, -1, SQLITE_STATIC);
                                 handleDbError(rc, "Failed to bind receiver username parameter for checking user existence");
 
@@ -293,8 +292,9 @@ int main() {
                                     responsePacket.error = INVALID_USER_DATA;
                                     send(connectionList[i].sd, &responsePacket, sizeof(Packet), 0);
                                 } else {
+                                    
                                     // Insert the message into the Messages table
-                                    const char* insertMessageQuery = "INSERT INTO Messages (sender, receiver, content, timeStamp, replyId, isDeleted) VALUES (?, ?, ?, CURRENT_TIMESTAMP, NULL, 0);";
+                                    const char* insertMessageQuery = "INSERT INTO Messages (sender, receiver, content, timeStamp, replyId, isDeleted) VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?, 0);";
                                     sqlite3_stmt* insertMessageStmt;
 
                                     rc = sqlite3_prepare_v2(db, insertMessageQuery, -1, &insertMessageStmt, NULL);
@@ -306,7 +306,19 @@ int main() {
                                     handleDbError(rc, "Failed to bind receiver parameter for message insertion");
                                     rc = sqlite3_bind_text(insertMessageStmt, 3, receivedPacket.message.content, -1, SQLITE_STATIC);
                                     handleDbError(rc, "Failed to bind content parameter for message insertion");
-                                    printf("here0: %s", receivedPacket.message.id);
+                                    
+                                    printf("replyID: [%s]\n", receivedPacket.message.replyId);
+                                    if (strcmp(receivedPacket.message.replyId, "") == 0) {
+                                        // Bind NULL for reply ID
+                                        rc = sqlite3_bind_null(insertMessageStmt, 4);
+                                    } else {
+                                        // Convert the reply ID to an integer and bind it
+                                        rc = sqlite3_bind_int(insertMessageStmt, 4, atoi(receivedPacket.message.replyId));
+                                    }
+                                    
+
+                                    handleDbError(rc, "Failed to bind reply ID parameter for message insertion");
+
                                     rc = sqlite3_step(insertMessageStmt);
                                     if (rc == SQLITE_DONE) {
                                         // The SQL statement has executed successfully
@@ -315,46 +327,76 @@ int main() {
                                         int messageId = sqlite3_last_insert_rowid(db);
 
                                         // Convert the integer to a string and copy it to the receivedPacket.message.id field
-                                        snprintf(receivedPacket.message.id, sizeof(receivedPacket.message.id), "%d", messageId);
+                                        sprintf(receivedPacket.message.id, "%d", messageId);
                                         printf("inserted: %s\n", receivedPacket.message.id);
+
+                                        // If the receiver is currently connected, send the message via a Packet
+                                        int found = -1;
+                                        for (int j = 0; j < MAX_CLIENTS; j++) {
+                                            if (strcmp(connectionList[j].username, receivedPacket.message.receiver) == 0) {
+                                                found = j;
+                                                break;
+                                            }
+                                        }
+
+                                        if (found != -1) {
+                                            Packet destPacket;
+                                            destPacket.type = MESSAGE_NOTIFICATION;
+                                            strcpy(destPacket.message.id, receivedPacket.message.id);
+                                            strcpy(destPacket.user.username, connectionList[i].username);
+                                            strcpy(destPacket.message.content, receivedPacket.message.content);
+
+                                            // If there is a reply ID, retrieve the content of the original message
+                                            if (receivedPacket.message.replyId[0] != '\0') {
+                                                // Check if the reply ID exists in the Messages table
+                                                const char* checkReplyQuery = "SELECT content FROM Messages WHERE id = ?;";
+                                                sqlite3_stmt* checkReplyStmt;
+
+                                                rc = sqlite3_prepare_v2(db, checkReplyQuery, -1, &checkReplyStmt, NULL);
+                                                handleDbError(rc, "Failed to prepare SQL statement for checking reply ID existence");
+
+                                                rc = sqlite3_bind_text(checkReplyStmt, 1, receivedPacket.message.replyId, -1, SQLITE_STATIC);
+                                                handleDbError(rc, "Failed to bind reply ID parameter for checking reply ID existence");
+
+                                                rc = sqlite3_step(checkReplyStmt);
+                                                if (rc == SQLITE_ROW) {
+                                                    const char* originalContent = (const char*)sqlite3_column_text(checkReplyStmt, 0);
+                                                    strcat(destPacket.message.content, "\n");  // Add a newline for separation
+                                                    strcat(destPacket.message.content, originalContent);
+                                                } else {
+                                                    // Reply ID does not exist, send SEND_MESSAGE_RESPONSE INVALID_REPLY_ID
+                                                    Packet responsePacket;
+                                                    responsePacket.type = SEND_MESSAGE_RESPONSE;
+                                                    responsePacket.error = INVALID_REPLY_ID;
+                                                    send(connectionList[i].sd, &responsePacket, sizeof(Packet), 0);
+                                                    sqlite3_finalize(checkReplyStmt);
+                                                    continue;  // Skip sending the message if the reply ID is invalid
+                                                }
+
+                                                sqlite3_finalize(checkReplyStmt);
+                                            }
+
+                                            // Send the message to the receiver client
+                                            send(connectionList[found].sd, &destPacket, sizeof(Packet), 0);
+                                        }
+
+                                        // Send SEND_MESSAGE_RESPONSE SUCCESS
+                                        Packet responsePacket;
+                                        responsePacket.type = SEND_MESSAGE_RESPONSE;
+                                        responsePacket.error = SUCCESS;
+                                        send(connectionList[i].sd, &responsePacket, sizeof(Packet), 0);
                                     } else {
                                         // Handle the case where an error occurred during execution
                                         printf("Failed to insert message into the database.\n");
                                     }
 
-                                    printf("here2: %s", receivedPacket.message.id);
                                     sqlite3_finalize(insertMessageStmt);
-
-                                    // If the receiver is currently connected, send the message via a Packet
-                                    int found = -1;
-                                    for (int j = 0; j < MAX_CLIENTS; j++) {
-                                        if (strcmp(connectionList[j].username, receivedPacket.message.receiver) == 0) {
-                                            found = j;
-                                            break;
-                                        }
-                                    }
-                                    printf("here1: %s", receivedPacket.message.id);
-
-                                    if (found != -1) {
-                                        Packet destPacket;
-                                        destPacket.type = MESSAGE_NOTIFICATION;
-                                        strcpy(destPacket.user.username, connectionList[i].username);
-                                        strcpy(destPacket.message.content, receivedPacket.message.content);
-                                        strcpy(destPacket.message.id, receivedPacket.message.id);
-                                        // Send the message to the receiver client
-                                        send(connectionList[found].sd, &destPacket, sizeof(Packet), 0);
-                                    }
-
-                                    // Send SEND_MESSAGE_RESPONSE SUCCESS
-                                    Packet responsePacket;
-                                    responsePacket.type = SEND_MESSAGE_RESPONSE;
-                                    responsePacket.error = SUCCESS;
-                                    send(connectionList[i].sd, &responsePacket, sizeof(Packet), 0);
                                 }
                             }
 
                             break;
                         }
+
 
 
                         case VIEW_ALL_CONVOS: {
@@ -383,8 +425,6 @@ int main() {
                 }
             }
         }
-
-
     }
 
     // Close all client sockets and the server socket
