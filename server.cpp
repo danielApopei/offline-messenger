@@ -116,7 +116,6 @@ int main() {
                 Packet receivedPacket;
                 ssize_t bytesReceived = recv(connectionList[i].sd, &receivedPacket, sizeof(Packet), 0);
                 if (bytesReceived > 0) {
-                    printf("well, i have received something!\n");
                     switch(receivedPacket.type) {
                         case REGISTER: {
                             printf("register received!\n");
@@ -258,15 +257,20 @@ int main() {
                             break;
                         }
                         case SEND_MESSAGE: {
+                            int okToAdd = 1;
                             printf("send_message received!\n");
-
+                            char replyContent[CONTENT_LENGTH];
+                            memset(replyContent, 0, sizeof(replyContent));
+                            strcpy(receivedPacket.message.receiver, connectionList[i].viewingConvo);
                             // Check if the sender is logged in
+                            printf("CHECKPOINT A\n");
                             if (strcmp(connectionList[i].username, "") == 0) {
                                 Packet responsePacket;
                                 responsePacket.type = SEND_MESSAGE_RESPONSE;
                                 responsePacket.error = NOT_LOGGED_IN;
                                 send(connectionList[i].sd, &responsePacket, sizeof(Packet), 0);
                             } else {
+                                printf("CHECKPOINT B\n");
                                 // Check if the receiver username exists in the Users table
                                 const char* checkUserQuery = "SELECT COUNT(*) FROM Users WHERE username = ?;";
                                 sqlite3_stmt* checkUserStmt;
@@ -292,11 +296,61 @@ int main() {
                                     responsePacket.error = INVALID_USER_DATA;
                                     send(connectionList[i].sd, &responsePacket, sizeof(Packet), 0);
                                 } else {
-                                    
+                                    printf("CHECKPOINT C\n");
+                                    if (receivedPacket.message.replyId[0] != '\0') {
+                                        // Check if the reply ID exists in the Messages table and is part of the same conversation
+                                        const char* checkReplyQuery = "SELECT content FROM Messages WHERE id = ? AND ((sender = ? AND receiver = ?) OR (sender = ? AND receiver = ?));";
+                                        sqlite3_stmt* checkReplyStmt;
+                                        printf("CHECKPOINT D\n");
+                                        rc = sqlite3_prepare_v2(db, checkReplyQuery, -1, &checkReplyStmt, NULL);
+                                        handleDbError(rc, "Failed to prepare SQL statement for checking reply ID existence");
+
+                                        rc = sqlite3_bind_text(checkReplyStmt, 1, receivedPacket.message.replyId, -1, SQLITE_STATIC);
+                                        handleDbError(rc, "Failed to bind reply ID parameter for checking reply ID existence");
+                                        rc = sqlite3_bind_text(checkReplyStmt, 2, connectionList[i].username, -1, SQLITE_STATIC);
+                                        handleDbError(rc, "Failed to bind sender parameter for checking reply ID existence");
+                                        rc = sqlite3_bind_text(checkReplyStmt, 3, receivedPacket.message.receiver, -1, SQLITE_STATIC);
+                                        handleDbError(rc, "Failed to bind receiver parameter for checking reply ID existence");
+                                        rc = sqlite3_bind_text(checkReplyStmt, 4, receivedPacket.message.receiver, -1, SQLITE_STATIC);
+                                        handleDbError(rc, "Failed to bind sender parameter for checking reply ID existence");
+                                        rc = sqlite3_bind_text(checkReplyStmt, 5, connectionList[i].username, -1, SQLITE_STATIC);
+                                        handleDbError(rc, "Failed to bind receiver parameter for checking reply ID existence");
+                                        printf("CHECKPOINT E\n");
+                                        rc = sqlite3_step(checkReplyStmt);
+                                        printf("CHECKPOINT E2\n");
+                                        if (rc == SQLITE_ROW) {
+                                            printf("CHECKPOINT E3\n");
+                                            const char* originalContent = (const char*)sqlite3_column_text(checkReplyStmt, 0);
+                                            printf("CHECKPOINT E4\n");
+                                            strcat(replyContent, "\n");  // Add a newline for separation
+                                            printf("CHECKPOINT E5\n");
+                                            strcat(replyContent, originalContent);
+                                            printf("CHECKPOINT E6\n");
+                                        } else {
+                                            printf("CHECKPOINT E7\n");
+                                            okToAdd = 0;
+                                            // Reply ID does not exist in the same conversation, send SEND_MESSAGE_RESPONSE INVALID_REPLY_ID
+                                            Packet responsePacket;
+                                            printf("CHECKPOINT E8\n");
+                                            responsePacket.type = SEND_MESSAGE_RESPONSE;
+                                            printf("CHECKPOINT E9\n");
+                                            responsePacket.error = INVALID_REPLY_ID;
+                                            printf("CHECKPOINT E10\n");
+                                            send(connectionList[i].sd, &responsePacket, sizeof(Packet), 0);
+                                            printf("CHECKPOINT E11\n");
+                                        }
+                                        if(checkReplyStmt != NULL)
+                                            sqlite3_finalize(checkReplyStmt);
+                                    }
+                                    if(okToAdd) {
+
+                                    printf("CHECKPOINT F\n");
                                     // Insert the message into the Messages table
                                     const char* insertMessageQuery = "INSERT INTO Messages (sender, receiver, content, timeStamp, replyId, isDeleted) VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?, 0);";
                                     sqlite3_stmt* insertMessageStmt;
-
+                                    if (receivedPacket.message.replyId[0] != '\0')
+                                        strcat(receivedPacket.message.content, replyContent);
+                                    printf("CHECKPOINT G\n");
                                     rc = sqlite3_prepare_v2(db, insertMessageQuery, -1, &insertMessageStmt, NULL);
                                     handleDbError(rc, "Failed to prepare SQL statement for message insertion");
                                     strcpy(receivedPacket.message.sender, connectionList[i].username);
@@ -315,12 +369,13 @@ int main() {
                                         // Convert the reply ID to an integer and bind it
                                         rc = sqlite3_bind_int(insertMessageStmt, 4, atoi(receivedPacket.message.replyId));
                                     }
-                                    
+                                    printf("CHECKPOINT H\n");
 
                                     handleDbError(rc, "Failed to bind reply ID parameter for message insertion");
 
                                     rc = sqlite3_step(insertMessageStmt);
                                     if (rc == SQLITE_DONE) {
+                                        printf("CHECKPOINT I\n");
                                         // The SQL statement has executed successfully
 
                                         // Get the last inserted row ID (message ID)
@@ -333,50 +388,57 @@ int main() {
                                         // If the receiver is currently connected, send the message via a Packet
                                         int found = -1;
                                         for (int j = 0; j < MAX_CLIENTS; j++) {
-                                            if (strcmp(connectionList[j].username, receivedPacket.message.receiver) == 0) {
+                                            if (strcmp(connectionList[j].username, receivedPacket.message.receiver) == 0 && strcmp(connectionList[j].viewingConvo, connectionList[i].username) == 0) {
                                                 found = j;
                                                 break;
                                             }
                                         }
-
+                                        printf("CHECKPOINT J\n");
                                         if (found != -1) {
                                             Packet destPacket;
                                             destPacket.type = MESSAGE_NOTIFICATION;
                                             strcpy(destPacket.message.id, receivedPacket.message.id);
-                                            strcpy(destPacket.user.username, connectionList[i].username);
+                                            strcpy(destPacket.message.sender, connectionList[i].username);
+                                            strcpy(destPacket.message.receiver, connectionList[found].username);
                                             strcpy(destPacket.message.content, receivedPacket.message.content);
 
-                                            // If there is a reply ID, retrieve the content of the original message
-                                            if (receivedPacket.message.replyId[0] != '\0') {
-                                                // Check if the reply ID exists in the Messages table
-                                                const char* checkReplyQuery = "SELECT content FROM Messages WHERE id = ?;";
-                                                sqlite3_stmt* checkReplyStmt;
+                                            const char* getTimeQuery = "SELECT CURRENT_TIMESTAMP FROM Messages;";
+                                            sqlite3_stmt* getTimeStmt;
 
-                                                rc = sqlite3_prepare_v2(db, checkReplyQuery, -1, &checkReplyStmt, NULL);
-                                                handleDbError(rc, "Failed to prepare SQL statement for checking reply ID existence");
+                                            rc = sqlite3_prepare_v2(db, getTimeQuery, -1, &getTimeStmt, NULL);
+                                            handleDbError(rc, "Failed to prepare SQL statement for getting current timestamp");
 
-                                                rc = sqlite3_bind_text(checkReplyStmt, 1, receivedPacket.message.replyId, -1, SQLITE_STATIC);
-                                                handleDbError(rc, "Failed to bind reply ID parameter for checking reply ID existence");
+                                            // Execute the query to get the current timestamp
+                                            rc = sqlite3_step(getTimeStmt);
 
-                                                rc = sqlite3_step(checkReplyStmt);
-                                                if (rc == SQLITE_ROW) {
-                                                    const char* originalContent = (const char*)sqlite3_column_text(checkReplyStmt, 0);
-                                                    strcat(destPacket.message.content, "\n");  // Add a newline for separation
-                                                    strcat(destPacket.message.content, originalContent);
-                                                } else {
-                                                    // Reply ID does not exist, send SEND_MESSAGE_RESPONSE INVALID_REPLY_ID
-                                                    Packet responsePacket;
-                                                    responsePacket.type = SEND_MESSAGE_RESPONSE;
-                                                    responsePacket.error = INVALID_REPLY_ID;
-                                                    send(connectionList[i].sd, &responsePacket, sizeof(Packet), 0);
-                                                    sqlite3_finalize(checkReplyStmt);
-                                                    continue;  // Skip sending the message if the reply ID is invalid
-                                                }
+                                            // Check if the query was successful
+                                            if (rc == SQLITE_ROW) {
+                                                // Retrieve the timestamp from the result
+                                                const char* currentTimestamp = (const char*)sqlite3_column_text(getTimeStmt, 0);
 
-                                                sqlite3_finalize(checkReplyStmt);
+                                                // Now, 'currentTimestamp' contains the current timestamp
+                                                printf("Current Timestamp: %s\n", currentTimestamp);
+                                                strcpy(destPacket.message.timeStamp, currentTimestamp);
+                                                // You can store 'currentTimestamp' in a variable or use it as needed
+                                            } else {
+                                                // Handle the case where the query did not return a row
+                                                printf("Failed to retrieve current timestamp.\n");
                                             }
 
+                                            // Finalize the statement
+                                            sqlite3_finalize(getTimeStmt);
+
+
+                                            // If there is a reply ID, retrieve the content of the original message
+                                            
+
                                             // Send the message to the receiver client
+                                            printf("destPacket id: %s\n", destPacket.message.id);
+                                            printf("destPacket sender: %s\n", destPacket.message.sender);
+                                            printf("destPacket receiver: %s\n", destPacket.message.receiver);
+                                            printf("destPacket timeStamp: %s\n", destPacket.message.timeStamp);
+                                            printf("destPacket content: %s\n", destPacket.message.content);
+                                            
                                             send(connectionList[found].sd, &destPacket, sizeof(Packet), 0);
                                         }
 
@@ -391,6 +453,7 @@ int main() {
                                     }
 
                                     sqlite3_finalize(insertMessageStmt);
+                                    }
                                 }
                             }
 
@@ -401,10 +464,135 @@ int main() {
 
                         case VIEW_ALL_CONVOS: {
                             printf("view_all_convos received!\n");
+
+                            // Check if the sender is logged in
+                            if (strcmp(connectionList[i].username, "") == 0) {
+                                Packet responsePacket;
+                                responsePacket.type = VIEW_ALL_CONVOS_RESPONSE;
+                                responsePacket.error = NOT_LOGGED_IN;
+                                send(connectionList[i].sd, &responsePacket, sizeof(Packet), 0);
+                            } else {
+                                strcpy(connectionList[i].viewingConvo, "");
+                                connectionList[i].currentView = MAIN_VIEW;
+                                // Select all unique participants where the current user is either the sender or receiver
+                                const char* selectParticipantsQuery = "SELECT DISTINCT participant FROM ("
+                                                                    "    SELECT sender AS participant FROM Messages WHERE receiver = ?"
+                                                                    "    UNION"
+                                                                    "    SELECT receiver AS participant FROM Messages WHERE sender = ?"
+                                                                    ");";
+                                sqlite3_stmt* selectParticipantsStmt;
+
+                                int rc = sqlite3_prepare_v2(db, selectParticipantsQuery, -1, &selectParticipantsStmt, NULL);
+                                handleDbError(rc, "Failed to prepare SQL statement for selecting participants");
+
+                                rc = sqlite3_bind_text(selectParticipantsStmt, 1, connectionList[i].username, -1, SQLITE_STATIC);
+                                handleDbError(rc, "Failed to bind username parameter for selecting participants");
+
+                                rc = sqlite3_bind_text(selectParticipantsStmt, 2, connectionList[i].username, -1, SQLITE_STATIC);
+                                handleDbError(rc, "Failed to bind username parameter for selecting participants");
+
+                                // Iterate over the results and send each participant through VIEW_ALL_CONVOS_RESPONSE packet
+                                while ((rc = sqlite3_step(selectParticipantsStmt)) == SQLITE_ROW) {
+                                    const char* participant = (const char*)sqlite3_column_text(selectParticipantsStmt, 0);
+
+                                    Packet responsePacket;
+                                    responsePacket.type = VIEW_ALL_CONVOS_RESPONSE;
+                                    strcpy(responsePacket.user.username, participant);
+                                    send(connectionList[i].sd, &responsePacket, sizeof(Packet), 0);
+                                }
+
+                                sqlite3_finalize(selectParticipantsStmt);
+                            }
+
                             break;
                         }
+
                         case VIEW_CONVERSATION: {
                             printf("view_convo received!\n");
+
+                            // Check if the user is logged in
+                            if (strcmp(connectionList[i].username, "") == 0) {
+                                Packet responsePacket;
+                                responsePacket.type = VIEW_CONVERSATION_RESPONSE;
+                                responsePacket.error = NOT_LOGGED_IN;
+                                send(connectionList[i].sd, &responsePacket, sizeof(Packet), 0);
+                            } else {
+                                // Check if the provided username is in the Users table
+                                const char* checkUserQuery = "SELECT COUNT(*) FROM Users WHERE username = ?;";
+                                sqlite3_stmt* checkUserStmt;
+
+                                int rc = sqlite3_prepare_v2(db, checkUserQuery, -1, &checkUserStmt, NULL);
+                                handleDbError(rc, "Failed to prepare SQL statement for checking user existence");
+
+                                rc = sqlite3_bind_text(checkUserStmt, 1, receivedPacket.user.username, -1, SQLITE_STATIC);
+                                handleDbError(rc, "Failed to bind username parameter for checking user existence");
+
+                                int userCount = 0;
+                                rc = sqlite3_step(checkUserStmt);
+                                if (rc == SQLITE_ROW) {
+                                    userCount = sqlite3_column_int(checkUserStmt, 0);
+                                }
+
+                                sqlite3_finalize(checkUserStmt);
+
+                                // If the provided username does not exist, send VIEW_CONVERSATION_RESPONSE INVALID_USER_DATA
+                                if (userCount == 0) {
+                                    Packet responsePacket;
+                                    responsePacket.type = VIEW_CONVERSATION_RESPONSE;
+                                    responsePacket.error = INVALID_USER_DATA;
+                                    send(connectionList[i].sd, &responsePacket, sizeof(Packet), 0);
+                                } else {
+                                    connectionList[i].currentView = CONVERSATION_VIEW;
+                                    strcpy(connectionList[i].viewingConvo, receivedPacket.user.username);
+                                    // Retrieve all messages exchanged between the two users
+                                    const char* selectMessagesQuery = "SELECT id, sender, receiver, content, timeStamp FROM Messages WHERE "
+                                                                    "(sender = ? AND receiver = ?) OR (sender = ? AND receiver = ?) ORDER BY timeStamp;";
+                                    sqlite3_stmt* selectMessagesStmt;
+
+                                    rc = sqlite3_prepare_v2(db, selectMessagesQuery, -1, &selectMessagesStmt, NULL);
+                                    handleDbError(rc, "Failed to prepare SQL statement for selecting messages");
+
+                                    rc = sqlite3_bind_text(selectMessagesStmt, 1, connectionList[i].username, -1, SQLITE_STATIC);
+                                    handleDbError(rc, "Failed to bind sender parameter for selecting messages");
+
+                                    rc = sqlite3_bind_text(selectMessagesStmt, 2, receivedPacket.user.username, -1, SQLITE_STATIC);
+                                    handleDbError(rc, "Failed to bind receiver parameter for selecting messages");
+
+                                    rc = sqlite3_bind_text(selectMessagesStmt, 3, receivedPacket.user.username, -1, SQLITE_STATIC);
+                                    handleDbError(rc, "Failed to bind sender parameter for selecting messages");
+
+                                    rc = sqlite3_bind_text(selectMessagesStmt, 4, connectionList[i].username, -1, SQLITE_STATIC);
+                                    handleDbError(rc, "Failed to bind receiver parameter for selecting messages");
+
+                                    // Iterate over the results and send each message through VIEW_CONVERSATION_RESPONSE packet
+                                    while ((rc = sqlite3_step(selectMessagesStmt)) == SQLITE_ROW) {
+                                        const char* id = (const char*) sqlite3_column_text(selectMessagesStmt, 0);
+                                        const char* sender = (const char*)sqlite3_column_text(selectMessagesStmt, 1);
+                                        const char* receiver = (const char*)sqlite3_column_text(selectMessagesStmt, 2);
+                                        const char* content = (const char*)sqlite3_column_text(selectMessagesStmt, 3);
+                                        const char* timeStamp = (const char*)sqlite3_column_text(selectMessagesStmt, 4);
+
+                                        Packet responsePacket;
+                                        responsePacket.type = VIEW_CONVERSATION_RESPONSE;
+                                        responsePacket.error = SUCCESS;
+                                        strcpy(responsePacket.message.id, id);
+                                        strcpy(responsePacket.message.sender, sender);
+                                        strcpy(responsePacket.message.receiver, receiver);
+                                        strcpy(responsePacket.message.content, content);
+                                        strcpy(responsePacket.message.timeStamp, timeStamp);
+                                        printf("id: %s\n", responsePacket.message.id);
+                                        printf("sender: %s\n", responsePacket.message.sender);
+                                        printf("receiver: %s\n", responsePacket.message.receiver);
+                                        printf("content: %s\n", responsePacket.message.content);
+                                        printf("timeStamp: %s\n", responsePacket.message.timeStamp);
+                                        
+
+                                        send(connectionList[i].sd, &responsePacket, sizeof(Packet), 0);
+                                    }
+
+                                    sqlite3_finalize(selectMessagesStmt);
+                                }
+                            }
                             break;
                         }
                         default: {
@@ -435,8 +623,5 @@ int main() {
     }
     close(serverSocket);
 
-
     return 0;
 }
-
-// finishing homework 2 prediction: Luni, ora 18:00

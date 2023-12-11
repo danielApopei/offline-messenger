@@ -48,21 +48,31 @@ void* receiveThread(void* arg) {
                         printf("-- you are not logged in!\n");
                     else if(receivedPacket.error == INVALID_USER_DATA)
                         printf("-- no such user!\n");
+                    else if(receivedPacket.error == INVALID_REPLY_ID)
+                    printf("-- invalid reply message!\n");
                     else
                         printf("-- sent!\n");
                     break;
                 }
                 case MESSAGE_NOTIFICATION: {
-                    printf("-- message with id %s from %s: %s\n", receivedPacket.message.id, receivedPacket.user.username, receivedPacket.message.content);
+                    printf("-- message with id %s: %s to %s at %s: %s\n", receivedPacket.message.id, receivedPacket.message.sender, receivedPacket.message.receiver, receivedPacket.message.timeStamp, receivedPacket.message.content);
                     fflush(stdout);
                     break;
                 }
                 case VIEW_ALL_CONVOS_RESPONSE: {
-                    printf("-- received view_all_convos_response!\n");
+                    if(receivedPacket.error == NOT_LOGGED_IN)
+                        printf("-- you are not logged in!\n");
+                    else
+                        printf("-- convo: %s\n", receivedPacket.user.username);
+                    fflush(stdout);
                     break;
                 }
                 case VIEW_CONVERSATION_RESPONSE: {
-                    printf("-- received view_conversation_response!\n");
+                    if(receivedPacket.error == NOT_LOGGED_IN)
+                        printf("-- you are not logged in!\n");
+                    else
+                        printf("-- message with id %s: %s to %s at %s: %s\n", receivedPacket.message.id, receivedPacket.message.sender, receivedPacket.message.receiver, receivedPacket.message.timeStamp, receivedPacket.message.content);
+                    fflush(stdout);
                     break;
                 }
                 default: {
@@ -125,31 +135,28 @@ void* userInputThread(void* arg) {
                 userPacket.type = LOGOUT;
             } else if (strcmp(params[0], "send") == 0) {
                 userPacket.type = SEND_MESSAGE;
-                if(paramCount < 3) {
-                    printf("syntax: send <user> <content>");
+                if(paramCount < 2) {
+                    printf("syntax: send <content>");
                     okToSend = 0;
                 } else {
                     strcpy(userPacket.message.replyId, "");
-                    strcpy(userPacket.message.receiver, params[1]);
-                    strcpy(userPacket.message.content, params[2]);
+                    strcpy(userPacket.message.content, params[1]);
 
-                    for(int i=3;i<paramCount;i++)
+                    for(int i=2;i<paramCount;i++)
                     {
                         strcat(userPacket.message.content, " ");
                         strcat(userPacket.message.content, params[i]);
                     }
-                    printf("client sending: %s\n", params[2]);
                 }
             } else if (strcmp(params[0], "reply") == 0) {
                 userPacket.type = SEND_MESSAGE;
-                if(paramCount < 4) {
-                    printf("syntax: reply <user> <messageId> <content>");
+                if(paramCount < 3) {
+                    printf("syntax: reply <messageId> <content>");
                     okToSend = 0;
                 } else {
                     strcpy(userPacket.message.replyId, params[1]);
-                    strcpy(userPacket.message.receiver, params[2]);
-                    strcpy(userPacket.message.content, params[3]);
-                    for(int i=4;i<paramCount;i++)
+                    strcpy(userPacket.message.content, params[2]);
+                    for(int i=3;i<paramCount;i++)
                     {
                         strcat(userPacket.message.content, " ");
                         strcat(userPacket.message.content, params[i]);
@@ -164,7 +171,10 @@ void* userInputThread(void* arg) {
                     okToSend = 0;
                 } else
                     strcpy(userPacket.user.username, params[1]);
+            } else if (strcmp(params[0], "exit") == 0) {
+                exit(EXIT_SUCCESS);
             } else {
+                printf("unknown command!\n");
                 userPacket.type = EMPTY;
                 okToSend = 0;
             }
