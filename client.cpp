@@ -82,7 +82,6 @@ void* receiveThread(void* arg) {
         } else if (bytesReceived == 0 || (bytesReceived == -1 && errno != EWOULDBLOCK && errno != EAGAIN)) {
             // The server has closed the connection or an error occurred
             printf("-- Server disconnected.\n");
-        
             break;
         }
     }
@@ -183,10 +182,7 @@ void* userInputThread(void* arg) {
         if(userPacket.type == EMPTY)
             okToSend = 0;
 
-        // Populate the rest of the userPacket with relevant data based on user input
-        // ...
         printf("okToSend: %d\n", okToSend);
-        // Send the userPacket to the server
         if(okToSend)
             send(clientSocket, &userPacket, sizeof(Packet), 0);
     }

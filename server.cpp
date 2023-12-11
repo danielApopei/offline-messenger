@@ -201,10 +201,6 @@ int main() {
                                     foundAnother = 1;
                             }
 
-                            printf("LOGIN DEBUG: foundAnother: %d\n", foundAnother);
-                            printf("LOGIN DEBUG: loginCount: %d\n", loginCount);
-                            
-
                             // If the login combination is correct, mark connectionList[i].username and send LOGIN_RESPONSE SUCCESS
                             if (loginCount < 1) {
                                 // If the login combination is incorrect, send LOGIN_RESPONSE INVALID_USER_DATA
@@ -231,7 +227,6 @@ int main() {
                                 printf("sending welcome: [%s]", responsePacket.user.username);
                                 send(connectionList[i].sd, &responsePacket, sizeof(Packet), 0);
                             }
-
                             break;
                         }
                         case LOGOUT: {
@@ -263,14 +258,12 @@ int main() {
                             memset(replyContent, 0, sizeof(replyContent));
                             strcpy(receivedPacket.message.receiver, connectionList[i].viewingConvo);
                             // Check if the sender is logged in
-                            printf("CHECKPOINT A\n");
                             if (strcmp(connectionList[i].username, "") == 0) {
                                 Packet responsePacket;
                                 responsePacket.type = SEND_MESSAGE_RESPONSE;
                                 responsePacket.error = NOT_LOGGED_IN;
                                 send(connectionList[i].sd, &responsePacket, sizeof(Packet), 0);
                             } else {
-                                printf("CHECKPOINT B\n");
                                 // Check if the receiver username exists in the Users table
                                 const char* checkUserQuery = "SELECT COUNT(*) FROM Users WHERE username = ?;";
                                 sqlite3_stmt* checkUserStmt;
@@ -296,12 +289,10 @@ int main() {
                                     responsePacket.error = INVALID_USER_DATA;
                                     send(connectionList[i].sd, &responsePacket, sizeof(Packet), 0);
                                 } else {
-                                    printf("CHECKPOINT C\n");
                                     if (receivedPacket.message.replyId[0] != '\0') {
                                         // Check if the reply ID exists in the Messages table and is part of the same conversation
                                         const char* checkReplyQuery = "SELECT content FROM Messages WHERE id = ? AND ((sender = ? AND receiver = ?) OR (sender = ? AND receiver = ?));";
                                         sqlite3_stmt* checkReplyStmt;
-                                        printf("CHECKPOINT D\n");
                                         rc = sqlite3_prepare_v2(db, checkReplyQuery, -1, &checkReplyStmt, NULL);
                                         handleDbError(rc, "Failed to prepare SQL statement for checking reply ID existence");
 
@@ -315,42 +306,28 @@ int main() {
                                         handleDbError(rc, "Failed to bind sender parameter for checking reply ID existence");
                                         rc = sqlite3_bind_text(checkReplyStmt, 5, connectionList[i].username, -1, SQLITE_STATIC);
                                         handleDbError(rc, "Failed to bind receiver parameter for checking reply ID existence");
-                                        printf("CHECKPOINT E\n");
                                         rc = sqlite3_step(checkReplyStmt);
-                                        printf("CHECKPOINT E2\n");
                                         if (rc == SQLITE_ROW) {
-                                            printf("CHECKPOINT E3\n");
                                             const char* originalContent = (const char*)sqlite3_column_text(checkReplyStmt, 0);
-                                            printf("CHECKPOINT E4\n");
                                             strcat(replyContent, "\n");  // Add a newline for separation
-                                            printf("CHECKPOINT E5\n");
                                             strcat(replyContent, originalContent);
-                                            printf("CHECKPOINT E6\n");
                                         } else {
-                                            printf("CHECKPOINT E7\n");
                                             okToAdd = 0;
                                             // Reply ID does not exist in the same conversation, send SEND_MESSAGE_RESPONSE INVALID_REPLY_ID
                                             Packet responsePacket;
-                                            printf("CHECKPOINT E8\n");
                                             responsePacket.type = SEND_MESSAGE_RESPONSE;
-                                            printf("CHECKPOINT E9\n");
                                             responsePacket.error = INVALID_REPLY_ID;
-                                            printf("CHECKPOINT E10\n");
                                             send(connectionList[i].sd, &responsePacket, sizeof(Packet), 0);
-                                            printf("CHECKPOINT E11\n");
                                         }
                                         if(checkReplyStmt != NULL)
                                             sqlite3_finalize(checkReplyStmt);
                                     }
                                     if(okToAdd) {
-
-                                    printf("CHECKPOINT F\n");
                                     // Insert the message into the Messages table
                                     const char* insertMessageQuery = "INSERT INTO Messages (sender, receiver, content, timeStamp, replyId, isDeleted) VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?, 0);";
                                     sqlite3_stmt* insertMessageStmt;
                                     if (receivedPacket.message.replyId[0] != '\0')
                                         strcat(receivedPacket.message.content, replyContent);
-                                    printf("CHECKPOINT G\n");
                                     rc = sqlite3_prepare_v2(db, insertMessageQuery, -1, &insertMessageStmt, NULL);
                                     handleDbError(rc, "Failed to prepare SQL statement for message insertion");
                                     strcpy(receivedPacket.message.sender, connectionList[i].username);
@@ -361,7 +338,6 @@ int main() {
                                     rc = sqlite3_bind_text(insertMessageStmt, 3, receivedPacket.message.content, -1, SQLITE_STATIC);
                                     handleDbError(rc, "Failed to bind content parameter for message insertion");
                                     
-                                    printf("replyID: [%s]\n", receivedPacket.message.replyId);
                                     if (strcmp(receivedPacket.message.replyId, "") == 0) {
                                         // Bind NULL for reply ID
                                         rc = sqlite3_bind_null(insertMessageStmt, 4);
@@ -369,13 +345,10 @@ int main() {
                                         // Convert the reply ID to an integer and bind it
                                         rc = sqlite3_bind_int(insertMessageStmt, 4, atoi(receivedPacket.message.replyId));
                                     }
-                                    printf("CHECKPOINT H\n");
-
                                     handleDbError(rc, "Failed to bind reply ID parameter for message insertion");
 
                                     rc = sqlite3_step(insertMessageStmt);
                                     if (rc == SQLITE_DONE) {
-                                        printf("CHECKPOINT I\n");
                                         // The SQL statement has executed successfully
 
                                         // Get the last inserted row ID (message ID)
@@ -393,7 +366,6 @@ int main() {
                                                 break;
                                             }
                                         }
-                                        printf("CHECKPOINT J\n");
                                         if (found != -1) {
                                             Packet destPacket;
                                             destPacket.type = MESSAGE_NOTIFICATION;
@@ -428,17 +400,6 @@ int main() {
                                             // Finalize the statement
                                             sqlite3_finalize(getTimeStmt);
 
-
-                                            // If there is a reply ID, retrieve the content of the original message
-                                            
-
-                                            // Send the message to the receiver client
-                                            printf("destPacket id: %s\n", destPacket.message.id);
-                                            printf("destPacket sender: %s\n", destPacket.message.sender);
-                                            printf("destPacket receiver: %s\n", destPacket.message.receiver);
-                                            printf("destPacket timeStamp: %s\n", destPacket.message.timeStamp);
-                                            printf("destPacket content: %s\n", destPacket.message.content);
-                                            
                                             send(connectionList[found].sd, &destPacket, sizeof(Packet), 0);
                                         }
 
@@ -532,7 +493,6 @@ int main() {
                                 if (rc == SQLITE_ROW) {
                                     userCount = sqlite3_column_int(checkUserStmt, 0);
                                 }
-
                                 sqlite3_finalize(checkUserStmt);
 
                                 // If the provided username does not exist, send VIEW_CONVERSATION_RESPONSE INVALID_USER_DATA
@@ -580,13 +540,7 @@ int main() {
                                         strcpy(responsePacket.message.receiver, receiver);
                                         strcpy(responsePacket.message.content, content);
                                         strcpy(responsePacket.message.timeStamp, timeStamp);
-                                        printf("id: %s\n", responsePacket.message.id);
-                                        printf("sender: %s\n", responsePacket.message.sender);
-                                        printf("receiver: %s\n", responsePacket.message.receiver);
-                                        printf("content: %s\n", responsePacket.message.content);
-                                        printf("timeStamp: %s\n", responsePacket.message.timeStamp);
                                         
-
                                         send(connectionList[i].sd, &responsePacket, sizeof(Packet), 0);
                                     }
 
@@ -599,14 +553,9 @@ int main() {
                             printf("unknown received!\n");
                         }
                     }
-                    // Process the received packet
-                    // ...
-                    // printf("Received packet from client %s\n", connectionList[i].username);
-                    // handle everything else
                 } else if (bytesReceived == 0 || (bytesReceived == -1 && errno != EWOULDBLOCK && errno != EAGAIN)) {
-                    // The client has closed the connection or an error occurred (other than non-blocking)
+                    // client closed connection
                     printf("Client %s disconnected.\n", connectionList[i].username);
-                    // Clean up resources and mark the connection as closed
                     close(connectionList[i].sd);
                     connectionList[i].sd = -1;
                     strcpy(connectionList[i].username, ""); // Optionally, clear other client information
@@ -622,6 +571,5 @@ int main() {
         }
     }
     close(serverSocket);
-
     return 0;
 }
