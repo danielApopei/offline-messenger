@@ -18,7 +18,6 @@ struct Message {
     char content[CONTENT_LENGTH];
     char timeStamp[TIMESTAMP_LENGTH];
     char replyId[ID_LENGTH]; // optional, only if this message is replying to another one
-    char isDeleted[ID_LENGTH];
 };
 
 enum PacketType {
@@ -45,7 +44,8 @@ enum ErrorType {
     USER_ALREADY_CONNECTED,
     NOT_LOGGED_IN, // when user tries to send message or log out, but it is not logged in the first place
     NOT_LOGGED_OUT, // when user tries to login, but they are already logged in
-    INVALID_REPLY_ID // for when the user tries to respond to an inexistent message
+    INVALID_REPLY_ID, // for when the user tries to respond to an inexistent message
+    WRONG_VIEW
 };
 
 struct Packet {
