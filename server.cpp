@@ -8,6 +8,7 @@
 #include <iostream>
 #include <pthread.h>
 #include <sqlite3.h>
+#include <signal.h>
 
 #define SERVER_PORT 2024
 #define MAX_CLIENTS 256
@@ -15,6 +16,17 @@
 Connection connectionList[MAX_CLIENTS];
 pthread_mutex_t connectionListMutex = PTHREAD_MUTEX_INITIALIZER;
 sqlite3 *db;
+
+void sigintHandler(int sig_num) {
+    for (int i = 0; i < MAX_CLIENTS; i++)
+    {
+        if (connectionList[i].sd != -1) {
+            close(connectionList[i].sd);
+        }
+    }
+    exit(0);
+}
+
 
 void initializeConnectionList() {
     for(int i = 0; i < MAX_CLIENTS; i++)
@@ -28,7 +40,7 @@ void printConnectionList()
 {
     pthread_mutex_lock(&connectionListMutex);
     printf("list: ");
-    for (int i = 0; i < 256; i++)
+    for (int i = 0; i < MAX_CLIENTS; i++)
     {
         if (connectionList[i].sd != -1) {
             printf("(%d, %d, %s) ", i, connectionList[i].sd, connectionList[i].username);
@@ -672,6 +684,7 @@ void* clientHandler(void* args) {
 }
 
 int main() {
+    signal(SIGINT, sigintHandler);
     char *errorMessage = nullptr;
     int rc = sqlite3_open("database.db", &db);
     if (rc != SQLITE_OK)
