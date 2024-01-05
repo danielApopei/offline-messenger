@@ -14,12 +14,21 @@ void* receiveThread(void* arg) {
     int clientSocket = *(int*)arg;
     while (1) {
         unsigned char receivedBuffer[sizeof(Packet)];
-        ssize_t bytesReceived = recv(clientSocket, receivedBuffer, sizeof(receivedBuffer), 0);
+        ssize_t totalBytesReceived = 0;
+        ssize_t bytesReceived;
+        while (totalBytesReceived < sizeof(Packet)) {
+            bytesReceived = recv(clientSocket, receivedBuffer + totalBytesReceived, sizeof(receivedBuffer) - totalBytesReceived, 0);
+            if (bytesReceived <= 0) {
+                // Handle error or closed connection
+                break;
+            }
+            totalBytesReceived += bytesReceived;
+        }
         xorEncryptDecrypt(receivedBuffer, sizeof(receivedBuffer), key);
         Packet receivedPacket;
         deserializePacket(receivedBuffer, &receivedPacket);
 
-        if (bytesReceived > 0) {
+        if (totalBytesReceived > 0) {
             switch(receivedPacket.type) {
                 case REGISTER_RESPONSE: {
                     if(receivedPacket.error == USER_ALREADY_EXISTS)

@@ -60,7 +60,16 @@ void* clientHandler(void* args) {
         printConnectionList();
         Packet receivedPacket;
         unsigned char receivedBuffer[sizeof(Packet)];
-        ssize_t bytesReceived = recv(clientSocket, receivedBuffer, sizeof(receivedBuffer), 0);
+        ssize_t totalBytesReceived = 0;
+        ssize_t bytesReceived;
+        while (totalBytesReceived < sizeof(Packet)) {
+            bytesReceived = recv(clientSocket, receivedBuffer + totalBytesReceived, sizeof(receivedBuffer) - totalBytesReceived, 0);
+            if (bytesReceived <= 0) {
+                // Handle error or closed connection
+                break;
+            }
+            totalBytesReceived += bytesReceived;
+        }
         xorEncryptDecrypt(receivedBuffer, sizeof(receivedBuffer), key);
         deserializePacket(receivedBuffer, &receivedPacket);
         if (bytesReceived > 0) {
