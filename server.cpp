@@ -108,7 +108,12 @@ void* clientHandler(void* args) {
 
                         rc = sqlite3_bind_text(insertUserStmt, 1, receivedPacket.user.username, -1, SQLITE_STATIC);
                         handleDbError(rc, "Failed to bind username parameter for user registration");
-                        rc = sqlite3_bind_text(insertUserStmt, 2, receivedPacket.user.password, -1, SQLITE_STATIC);
+                        // encoding pass before
+                        char encryptedPass[256];
+                        strcpy(encryptedPass, receivedPacket.user.password);
+                        encode_vigenere(encryptedPass, vigenere_key);
+
+                        rc = sqlite3_bind_text(insertUserStmt, 2, encryptedPass, -1, SQLITE_STATIC);
                         handleDbError(rc, "Failed to bind password parameter for user registration");
 
                         rc = sqlite3_step(insertUserStmt);
@@ -143,7 +148,11 @@ void* clientHandler(void* args) {
 
                     rc = sqlite3_bind_text(checkLoginStmt, 1, receivedPacket.user.username, -1, SQLITE_STATIC);
                     handleDbError(rc, "Failed to bind username parameter for checking login");
-                    rc = sqlite3_bind_text(checkLoginStmt, 2, receivedPacket.user.password, -1, SQLITE_STATIC);
+                    // encoding pass before
+                    char encryptedPass[256];
+                    strcpy(encryptedPass, receivedPacket.user.password);
+                    encode_vigenere(encryptedPass, vigenere_key);
+                    rc = sqlite3_bind_text(checkLoginStmt, 2, encryptedPass, -1, SQLITE_STATIC);
                     handleDbError(rc, "Failed to bind password parameter for checking login");
 
                     int loginCount = 0;

@@ -91,3 +91,61 @@ void xorEncryptDecrypt(unsigned char *data, int data_len, const char* key) {
         data[i] ^= key[i % key_len];
     }
 }
+
+void encode_vigenere(char* plain_text, char* key)
+{
+    unsigned char encrypted_text[256];
+    int text_length = strlen(plain_text);
+    int key_length = strlen(key);
+    int count = 0;
+    for(int i=0;i<text_length;i++)
+    {
+        int rez = (int)(plain_text[i] - 'a') + (int)(key[i%key_length] - 'a');
+        rez = rez % 26;
+        if(plain_text[i]>='a' && plain_text[i]<='z')
+        {
+            int poz = (i - count) % key_length;
+            int init = plain_text[i] - 'a';
+            int another = key[poz] - 'a';
+            init += another;
+            init = init % 26;
+            char ch = (char)(init + 'a');
+            plain_text[i] = ch;
+        }
+        else
+        {
+            count++;
+        }
+    }
+}
+
+void decode_vigenere(char* plain_text, char* key)
+{
+    unsigned char encrypted_text[256];
+    int text_length = strlen(plain_text);
+    int key_length = strlen(key);
+    int count = 0;
+    for(int i=0;i<text_length;i++)
+    {
+        int rez = (int)(plain_text[i] - 'a') - (int)(key[i%key_length] - 'a');
+        rez = rez % 26;
+        if(plain_text[i]>='a' && plain_text[i]<='z')
+        {
+            int poz = (i - count) % key_length;
+            int init = plain_text[i] - 'a';
+            int another = key[poz] - 'a';
+            init -= another;
+            while(init<0)
+                init+=26;
+            init = init % 26;
+            char ch = (char)(init + 'a');
+            plain_text[i] = ch;
+        }
+        else
+        {
+            count++;
+        }
+    }
+}
+
+char vigenere_key[256] = "tenacity\0";
