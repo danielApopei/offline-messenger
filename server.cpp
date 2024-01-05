@@ -59,7 +59,10 @@ void* clientHandler(void* args) {
     while(1) {
         printConnectionList();
         Packet receivedPacket;
-        ssize_t bytesReceived = recv(clientSocket, &receivedPacket, sizeof(Packet), 0);
+        unsigned char receivedBuffer[sizeof(Packet)];
+        ssize_t bytesReceived = recv(clientSocket, receivedBuffer, sizeof(receivedBuffer), 0);
+        xorEncryptDecrypt(receivedBuffer, sizeof(receivedBuffer), key);
+        deserializePacket(receivedBuffer, &receivedPacket);
         if (bytesReceived > 0) {
             switch(receivedPacket.type) {
                 case REGISTER: {
@@ -89,7 +92,10 @@ void* clientHandler(void* args) {
                         Packet responsePacket;
                         responsePacket.type = REGISTER_RESPONSE;
                         responsePacket.error = USER_ALREADY_EXISTS;
-                        send(clientSocket, &responsePacket, sizeof(Packet), 0);
+                        unsigned char buffer[sizeof(Packet)];
+                        serializePacket(&responsePacket, buffer, sizeof(buffer));
+                        xorEncryptDecrypt(buffer, sizeof(buffer), key);
+                        send(clientSocket, buffer, sizeof(buffer), 0);
                     }
                     else
                     {
@@ -117,7 +123,10 @@ void* clientHandler(void* args) {
                         responsePacket.error = SUCCESS;
                         strcpy(responsePacket.user.username, connectionList[connectionIndex].username);
                         pthread_mutex_unlock(&connectionListMutex);
-                        send(clientSocket, &responsePacket, sizeof(Packet), 0);
+                        unsigned char buffer[sizeof(Packet)];
+                        serializePacket(&responsePacket, buffer, sizeof(buffer));
+                        xorEncryptDecrypt(buffer, sizeof(buffer), key);
+                        send(clientSocket, buffer, sizeof(buffer), 0);
                     }
 
                     break;
@@ -160,14 +169,20 @@ void* clientHandler(void* args) {
                         Packet responsePacket;
                         responsePacket.type = LOGIN_RESPONSE;
                         responsePacket.error = INVALID_USER_DATA;
-                        send(clientSocket, &responsePacket, sizeof(Packet), 0);
+                        unsigned char buffer[sizeof(Packet)];
+                        serializePacket(&responsePacket, buffer, sizeof(buffer));
+                        xorEncryptDecrypt(buffer, sizeof(buffer), key);
+                        send(clientSocket, buffer, sizeof(buffer), 0);
                     }
                     else if (foundAnother == 1)
                     {
                         Packet responsePacket;
                         responsePacket.type = LOGIN_RESPONSE;
                         responsePacket.error = USER_ALREADY_CONNECTED;
-                        send(clientSocket, &responsePacket, sizeof(Packet), 0);
+                        unsigned char buffer[sizeof(Packet)];
+                        serializePacket(&responsePacket, buffer, sizeof(buffer));
+                        xorEncryptDecrypt(buffer, sizeof(buffer), key);
+                        send(clientSocket, buffer, sizeof(buffer), 0);
                     }
                     else
                     {
@@ -184,7 +199,10 @@ void* clientHandler(void* args) {
                         strcpy(responsePacket.user.username, connectionList[connectionIndex].username);
                         printf("sending welcome: [%s]", responsePacket.user.username);
                         pthread_mutex_unlock(&connectionListMutex);
-                        send(clientSocket, &responsePacket, sizeof(Packet), 0);
+                        unsigned char buffer[sizeof(Packet)];
+                        serializePacket(&responsePacket, buffer, sizeof(buffer));
+                        xorEncryptDecrypt(buffer, sizeof(buffer), key);
+                        send(clientSocket, buffer, sizeof(buffer), 0);
                     }
                     break;
                 }
@@ -196,7 +214,10 @@ void* clientHandler(void* args) {
                         Packet responsePacket;
                         responsePacket.type = LOGOUT_RESPONSE;
                         responsePacket.error = NOT_LOGGED_IN;
-                        send(clientSocket, &responsePacket, sizeof(Packet), 0);
+                        unsigned char buffer[sizeof(Packet)];
+                        serializePacket(&responsePacket, buffer, sizeof(buffer));
+                        xorEncryptDecrypt(buffer, sizeof(buffer), key);
+                        send(clientSocket, buffer, sizeof(buffer), 0);
                     }
                     else
                     {
@@ -208,7 +229,10 @@ void* clientHandler(void* args) {
                         responsePacket.type = LOGOUT_RESPONSE;
                         responsePacket.error = SUCCESS;
                         pthread_mutex_unlock(&connectionListMutex);
-                        send(clientSocket, &responsePacket, sizeof(Packet), 0);
+                        unsigned char buffer[sizeof(Packet)];
+                        serializePacket(&responsePacket, buffer, sizeof(buffer));
+                        xorEncryptDecrypt(buffer, sizeof(buffer), key);
+                        send(clientSocket, buffer, sizeof(buffer), 0);
                     }
                     break;
                 }
@@ -226,14 +250,20 @@ void* clientHandler(void* args) {
                         Packet responsePacket;
                         responsePacket.type = SEND_MESSAGE_RESPONSE;
                         responsePacket.error = WRONG_VIEW;
-                        send(clientSocket, &responsePacket, sizeof(Packet), 0);
+                        unsigned char buffer[sizeof(Packet)];
+                        serializePacket(&responsePacket, buffer, sizeof(buffer));
+                        xorEncryptDecrypt(buffer, sizeof(buffer), key);
+                        send(clientSocket, buffer, sizeof(buffer), 0);
                     }
                     else if (strcmp(connectionList[connectionIndex].username, "") == 0)
                     {
                         Packet responsePacket;
                         responsePacket.type = SEND_MESSAGE_RESPONSE;
                         responsePacket.error = NOT_LOGGED_IN;
-                        send(clientSocket, &responsePacket, sizeof(Packet), 0);
+                        unsigned char buffer[sizeof(Packet)];
+                        serializePacket(&responsePacket, buffer, sizeof(buffer));
+                        xorEncryptDecrypt(buffer, sizeof(buffer), key);
+                        send(clientSocket, buffer, sizeof(buffer), 0);
                     }
                     else
                     {
@@ -262,7 +292,10 @@ void* clientHandler(void* args) {
                             Packet responsePacket;
                             responsePacket.type = SEND_MESSAGE_RESPONSE;
                             responsePacket.error = INVALID_USER_DATA;
-                            send(clientSocket, &responsePacket, sizeof(Packet), 0);
+                            unsigned char buffer[sizeof(Packet)];
+                        serializePacket(&responsePacket, buffer, sizeof(buffer));
+                        xorEncryptDecrypt(buffer, sizeof(buffer), key);
+                        send(clientSocket, buffer, sizeof(buffer), 0);
                         }
                         else
                         {
@@ -299,7 +332,10 @@ void* clientHandler(void* args) {
                                     Packet responsePacket;
                                     responsePacket.type = SEND_MESSAGE_RESPONSE;
                                     responsePacket.error = INVALID_REPLY_ID;
-                                    send(clientSocket, &responsePacket, sizeof(Packet), 0);
+                                    unsigned char buffer[sizeof(Packet)];
+                        serializePacket(&responsePacket, buffer, sizeof(buffer));
+                        xorEncryptDecrypt(buffer, sizeof(buffer), key);
+                        send(clientSocket, buffer, sizeof(buffer), 0);
                                 }
                                 if (checkReplyStmt != NULL)
                                     sqlite3_finalize(checkReplyStmt);
@@ -391,7 +427,10 @@ void* clientHandler(void* args) {
                                         // Now, 'currentTimestamp' contains the current timestamp
                                         printf("Current Timestamp: %s\n", currentTimestamp);
                                         strcpy(destPacket.message.timeStamp, currentTimestamp);
-                                        send(clientSocket, &destPacket, sizeof(Packet), 0);
+                                        unsigned char buffer[sizeof(Packet)];
+                                        serializePacket(&destPacket, buffer, sizeof(buffer));
+                                        xorEncryptDecrypt(buffer, sizeof(buffer), key);
+                                        send(clientSocket, buffer, sizeof(buffer), 0);
                                         // You can store 'currentTimestamp' in a variable or use it as needed
                                     }
                                     else
@@ -405,14 +444,21 @@ void* clientHandler(void* args) {
                                     
                                     if (found != -1)
                                     {
-                                        send(connectionList[found].sd, &destPacket, sizeof(Packet), 0);
+                                        // send(connectionList[found].sd, &destPacket, sizeof(Packet), 0);
+                                        unsigned char buffer[sizeof(Packet)];
+                                        serializePacket(&destPacket, buffer, sizeof(buffer));
+                                        xorEncryptDecrypt(buffer, sizeof(buffer), key);
+                                        send(connectionList[found].sd, buffer, sizeof(buffer), 0);
                                     }
                                     pthread_mutex_unlock(&connectionListMutex);
                                     // Send SEND_MESSAGE_RESPONSE SUCCESS
                                     Packet responsePacket;
                                     responsePacket.type = SEND_MESSAGE_RESPONSE;
                                     responsePacket.error = SUCCESS;
-                                    send(clientSocket, &responsePacket, sizeof(Packet), 0);
+                                    unsigned char buffer[sizeof(Packet)];
+                        serializePacket(&responsePacket, buffer, sizeof(buffer));
+                        xorEncryptDecrypt(buffer, sizeof(buffer), key);
+                        send(clientSocket, buffer, sizeof(buffer), 0);
                                 }
                                 else
                                 {
@@ -436,7 +482,10 @@ void* clientHandler(void* args) {
                         Packet responsePacket;
                         responsePacket.type = VIEW_ALL_CONVOS_RESPONSE;
                         responsePacket.error = NOT_LOGGED_IN;
-                        send(clientSocket, &responsePacket, sizeof(Packet), 0);
+                        unsigned char buffer[sizeof(Packet)];
+                        serializePacket(&responsePacket, buffer, sizeof(buffer));
+                        xorEncryptDecrypt(buffer, sizeof(buffer), key);
+                        send(clientSocket, buffer, sizeof(buffer), 0);
                     }
                     else
                     {
@@ -467,7 +516,10 @@ void* clientHandler(void* args) {
                             Packet responsePacket;
                             responsePacket.type = VIEW_ALL_CONVOS_RESPONSE;
                             strcpy(responsePacket.user.username, participant);
-                            send(clientSocket, &responsePacket, sizeof(Packet), 0);
+                            unsigned char buffer[sizeof(Packet)];
+                        serializePacket(&responsePacket, buffer, sizeof(buffer));
+                        xorEncryptDecrypt(buffer, sizeof(buffer), key);
+                        send(clientSocket, buffer, sizeof(buffer), 0);
                         }
 
                         sqlite3_finalize(selectParticipantsStmt);
@@ -484,7 +536,10 @@ void* clientHandler(void* args) {
                         Packet responsePacket;
                         responsePacket.type = VIEW_CONVERSATION_RESPONSE;
                         responsePacket.error = NOT_LOGGED_IN;
-                        send(clientSocket, &responsePacket, sizeof(Packet), 0);
+                        unsigned char buffer[sizeof(Packet)];
+                        serializePacket(&responsePacket, buffer, sizeof(buffer));
+                        xorEncryptDecrypt(buffer, sizeof(buffer), key);
+                        send(clientSocket, buffer, sizeof(buffer), 0);
                     }
                     else
                     {
@@ -512,7 +567,10 @@ void* clientHandler(void* args) {
                             Packet responsePacket;
                             responsePacket.type = VIEW_CONVERSATION_RESPONSE;
                             responsePacket.error = INVALID_USER_DATA;
-                            send(clientSocket, &responsePacket, sizeof(Packet), 0);
+                            unsigned char buffer[sizeof(Packet)];
+                        serializePacket(&responsePacket, buffer, sizeof(buffer));
+                        xorEncryptDecrypt(buffer, sizeof(buffer), key);
+                        send(clientSocket, buffer, sizeof(buffer), 0);
                         }
                         else
                         {
@@ -556,7 +614,10 @@ void* clientHandler(void* args) {
                                 strcpy(responsePacket.message.content, content);
                                 strcpy(responsePacket.message.timeStamp, timeStamp);
 
-                                send(clientSocket, &responsePacket, sizeof(Packet), 0);
+                                unsigned char buffer[sizeof(Packet)];
+                        serializePacket(&responsePacket, buffer, sizeof(buffer));
+                        xorEncryptDecrypt(buffer, sizeof(buffer), key);
+                        send(clientSocket, buffer, sizeof(buffer), 0);
                             }
 
                             sqlite3_finalize(selectMessagesStmt);
@@ -569,7 +630,11 @@ void* clientHandler(void* args) {
                     Packet P2;
                     P2.type = EMPTY;
                     P2.error = SUCCESS;
-                    send(clientSocket, &P2, sizeof(Packet), 0);
+                    unsigned char buffer[sizeof(Packet)];
+                    serializePacket(&P2, buffer, sizeof(buffer));
+                    xorEncryptDecrypt(buffer, sizeof(buffer), key);
+                    send(clientSocket, buffer, sizeof(buffer), 0);
+                    // send(clientSocket, &P2, sizeof(Packet), 0);
                 }
             }
         } else if (bytesReceived <= 0) {

@@ -1,3 +1,5 @@
+#include <cstring>
+
 // GENERAL STRUCTURES USED BY BOTH CLIENT & SERVER
 
 #define USERNAME_LENGTH 32
@@ -68,3 +70,24 @@ struct Connection {
     ViewType currentView;
     char viewingConvo[USERNAME_LENGTH];
 }; // server will manage an array of type Connection through which it will know how many clients are connected and with what users
+
+void serializePacket(const Packet *packet, unsigned char *buffer, size_t bufferSize) {
+    if (bufferSize < sizeof(Packet)) {
+        // Handle error: buffer too small
+        return;
+    }
+    memcpy(buffer, packet, sizeof(Packet));
+}
+
+void deserializePacket(const unsigned char *buffer, Packet *packet) {
+    memcpy(packet, buffer, sizeof(Packet));
+}
+
+const char *key = "tenacity"; // should be the same on both client and server
+
+void xorEncryptDecrypt(unsigned char *data, int data_len, const char* key) {
+    size_t key_len = strlen(key);
+    for (size_t i = 0; i < data_len; i++) {
+        data[i] ^= key[i % key_len];
+    }
+}

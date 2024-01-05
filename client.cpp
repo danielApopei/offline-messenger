@@ -13,8 +13,12 @@
 void* receiveThread(void* arg) {
     int clientSocket = *(int*)arg;
     while (1) {
+        unsigned char receivedBuffer[sizeof(Packet)];
+        ssize_t bytesReceived = recv(clientSocket, receivedBuffer, sizeof(receivedBuffer), 0);
+        xorEncryptDecrypt(receivedBuffer, sizeof(receivedBuffer), key);
         Packet receivedPacket;
-        ssize_t bytesReceived = recv(clientSocket, &receivedPacket, sizeof(Packet), 0);
+        deserializePacket(receivedBuffer, &receivedPacket);
+
         if (bytesReceived > 0) {
             switch(receivedPacket.type) {
                 case REGISTER_RESPONSE: {
@@ -66,6 +70,7 @@ void* receiveThread(void* arg) {
                 case VIEW_ALL_CONVOS_RESPONSE: {
                     if(receivedPacket.error == NOT_LOGGED_IN)
                         printf("\n-- You are not logged in!\n");
+                    else
                         printf("\n-- Convo: %s\n", receivedPacket.user.username);
                     fflush(stdout);
                     break;
@@ -178,7 +183,12 @@ void* userInputThread(void* arg) {
             }
         }
         if(okToSend)
-            send(clientSocket, &P, sizeof(Packet), 0);
+        {
+            unsigned char buffer[sizeof(Packet)];
+            serializePacket(&P, buffer, sizeof(buffer));
+            xorEncryptDecrypt(buffer, sizeof(buffer), key);
+            send(clientSocket, buffer, sizeof(buffer), 0);
+        }
     }
     pthread_exit(NULL);
 }
