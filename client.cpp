@@ -185,8 +185,17 @@ void* userInputThread(void* arg) {
                 printf("disconnecting...\n");
                 fflush(stdout);
                 exit(0);
+            } else if (strcmp(params[0], "help") == 0) {
+                printf("login <user> <pass> - login into existing account\n");
+                printf("register <user> <pass> - create a new account\n");
+                printf("viewallconvos - see all your past conversations\n");
+                printf("viewconvo <user> - enter conversation with [user]\n");
+                printf("send <message> - send message to the user of the current conversation\n");
+                printf("reply <id> <message> - reply to a specific message\n");
+                printf("exit - close the app\n");
+                okToSend = 0;
             } else {
-                printf("-- Unknown command!\n");
+                printf("-- Unknown command! Type 'help' for a list of commands...\n");
                 P.type = EMPTY;
                 okToSend = 0;
             }
