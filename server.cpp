@@ -59,15 +59,11 @@ void handleDbError(int rc, const char *errorMsg)
     }
 }
 
-// Function to handle client communication in a separate thread
 void* clientHandler(void* args) {
     int* arguments = (int*)args;
     int clientSocket = arguments[0];
     int connectionIndex = arguments[1];
     free(args);
-    // Placeholder for client communication logic
-    // This should handle the communication with the client using clientSocket
-    // and manage the client's data in connectionList[connectionIndex]
     while(1) {
         printConnectionList();
         Packet receivedPacket;
@@ -77,7 +73,6 @@ void* clientHandler(void* args) {
         while (totalBytesReceived < sizeof(Packet)) {
             bytesReceived = recv(clientSocket, receivedBuffer + totalBytesReceived, sizeof(receivedBuffer) - totalBytesReceived, 0);
             if (bytesReceived <= 0) {
-                // Handle error or closed connection
                 break;
             }
             totalBytesReceived += bytesReceived;
@@ -89,7 +84,7 @@ void* clientHandler(void* args) {
                 case REGISTER: {
                     printf("register received!\n");
 
-                    // Check if username already exists in the database
+                    // check if user already exists
                     const char *checkUserQuery = "SELECT COUNT(*) FROM Users WHERE username = ?;";
                     sqlite3_stmt *checkUserStmt;
 
@@ -107,7 +102,7 @@ void* clientHandler(void* args) {
 
                     sqlite3_finalize(checkUserStmt);
 
-                    // If the username already exists, send USER_ALREADY_EXISTS response
+                    // if yes, send USER_ALREADY_EXISTS response
                     if (userCount > 0)
                     {
                         Packet responsePacket;
@@ -120,7 +115,7 @@ void* clientHandler(void* args) {
                     }
                     else
                     {
-                        // Insert new user into the database
+                        // if no, ok! insert new user into the database
                         const char *insertUserQuery = "INSERT INTO Users (username, password) VALUES (?, ?);";
                         sqlite3_stmt *insertUserStmt;
 
@@ -133,7 +128,7 @@ void* clientHandler(void* args) {
 
                         rc = sqlite3_bind_text(insertUserStmt, 1, receivedPacket.user.username, -1, SQLITE_STATIC);
                         handleDbError(rc, "Failed to bind username parameter for user registration");
-                        // encoding pass before
+                        
                         char encryptedPass[256];
                         strcpy(encryptedPass, receivedPacket.user.password);
                         encode_vigenere(encryptedPass, encryptedUser);
@@ -147,7 +142,7 @@ void* clientHandler(void* args) {
                         strcpy(connectionList[connectionIndex].username, receivedPacket.user.username);
                         connectionList[connectionIndex].currentView = MAIN_VIEW;
 
-                        // Send SUCCESS response
+                        // send SUCCESS response
                         Packet responsePacket;
                         responsePacket.type = REGISTER_RESPONSE;
                         responsePacket.error = SUCCESS;
@@ -164,7 +159,7 @@ void* clientHandler(void* args) {
                 case LOGIN: {
                     printf("login received!\n");
 
-                    // Check if username and password combination exists in the database
+                    // check if username and password combination exists in the database
                     const char *checkLoginQuery = "SELECT COUNT(*) FROM Users WHERE username = ? AND password = ?;";
                     sqlite3_stmt *checkLoginStmt;
 
@@ -177,7 +172,7 @@ void* clientHandler(void* args) {
 
                     rc = sqlite3_bind_text(checkLoginStmt, 1, receivedPacket.user.username, -1, SQLITE_STATIC);
                     handleDbError(rc, "Failed to bind username parameter for checking login");
-                    // encoding pass before
+                    
                     char encryptedPass[256];
                     strcpy(encryptedPass, receivedPacket.user.password);
                     encode_vigenere(encryptedPass, encryptedUser);
@@ -200,10 +195,10 @@ void* clientHandler(void* args) {
                             foundAnother = 1;
                     }
                     pthread_mutex_unlock(&connectionListMutex);
-                    // If the login combination is correct, mark connectionList[i].username and send LOGIN_RESPONSE SUCCESS
+                    // if correct, mark connectionList[i].username and send LOGIN_RESPONSE SUCCESS
                     if (loginCount < 1)
                     {
-                        // If the login combination is incorrect, send LOGIN_RESPONSE INVALID_USER_DATA
+                        // if the login combination is incorrect, send LOGIN_RESPONSE INVALID_USER_DATA
                         Packet responsePacket;
                         responsePacket.type = LOGIN_RESPONSE;
                         responsePacket.error = INVALID_USER_DATA;
@@ -224,10 +219,10 @@ void* clientHandler(void* args) {
                     }
                     else
                     {
-                        // Mark connectionList[i].username
+                        // mark connectionList[i].username
                         strcpy(connectionList[connectionIndex].username, receivedPacket.user.username);
 
-                        // Send SUCCESS response
+                        // send SUCCESS response
                         Packet responsePacket;
                         responsePacket.type = LOGIN_RESPONSE;
                         responsePacket.error = SUCCESS;
@@ -282,7 +277,6 @@ void* clientHandler(void* args) {
                     pthread_mutex_lock(&connectionListMutex);
                     strcpy(receivedPacket.message.receiver, connectionList[connectionIndex].viewingConvo);
                     pthread_mutex_unlock(&connectionListMutex);
-                    // Check if the sender is logged in
                     if (connectionList[connectionIndex].currentView != CONVERSATION_VIEW)
                     {
                         Packet responsePacket;
@@ -305,7 +299,7 @@ void* clientHandler(void* args) {
                     }
                     else
                     {
-                        // Check if the receiver username exists in the Users table
+                        // check if receiver username exists in db
                         const char *checkUserQuery = "SELECT COUNT(*) FROM Users WHERE username = ?;";
                         sqlite3_stmt *checkUserStmt;
 
@@ -324,7 +318,7 @@ void* clientHandler(void* args) {
 
                         sqlite3_finalize(checkUserStmt);
 
-                        // If the receiver username does not exist, send SEND_MESSAGE_RESPONSE INVALID_USER_DATA
+                        // if not, send SEND_MESSAGE_RESPONSE INVALID_USER_DATA
                         if (userCount == 0)
                         {
                             Packet responsePacket;
@@ -340,7 +334,7 @@ void* clientHandler(void* args) {
                             if (receivedPacket.message.replyId[0] != '\0')
                             {
                                 pthread_mutex_lock(&connectionListMutex);
-                                // Check if the reply ID exists in the Messages table and is part of the same conversation
+                                // check if the reply ID exists in the Messages table and is part of the same conversation
                                 const char *checkReplyQuery = "SELECT content FROM Messages WHERE id = ? AND ((sender = ? AND receiver = ?) OR (sender = ? AND receiver = ?));";
                                 sqlite3_stmt *checkReplyStmt;
                                 rc = sqlite3_prepare_v2(db, checkReplyQuery, -1, &checkReplyStmt, NULL);
@@ -366,7 +360,7 @@ void* clientHandler(void* args) {
                                 else
                                 {
                                     okToAdd = 0;
-                                    // Reply ID does not exist in the same conversation, send SEND_MESSAGE_RESPONSE INVALID_REPLY_ID
+                                    // reply ID does not exist in the same conversation, send SEND_MESSAGE_RESPONSE INVALID_REPLY_ID
                                     Packet responsePacket;
                                     responsePacket.type = SEND_MESSAGE_RESPONSE;
                                     responsePacket.error = INVALID_REPLY_ID;
@@ -382,7 +376,7 @@ void* clientHandler(void* args) {
                             if (okToAdd)
                             {
                                 pthread_mutex_lock(&connectionListMutex);
-                                // Insert the message into the Messages table
+                                // insert the message into the db
                                 const char *insertMessageQuery = "INSERT INTO Messages (sender, receiver, content, timeStamp, replyId, isDeleted) VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?, 0);";
                                 sqlite3_stmt *insertMessageStmt;
                                 if (receivedPacket.message.replyId[0] != '\0')
@@ -407,13 +401,9 @@ void* clientHandler(void* args) {
                                 handleDbError(rc, "Failed to bind content parameter for message insertion");
                                 pthread_mutex_unlock(&connectionListMutex);
                                 if (strcmp(receivedPacket.message.replyId, "") == 0)
-                                {
-                                    // Bind NULL for reply ID
                                     rc = sqlite3_bind_null(insertMessageStmt, 4);
-                                }
                                 else
                                 {
-                                    // Convert the reply ID to an integer and bind it
                                     rc = sqlite3_bind_int(insertMessageStmt, 4, atoi(receivedPacket.message.replyId));
                                 }
                                 handleDbError(rc, "Failed to bind reply ID parameter for message insertion");
@@ -421,16 +411,11 @@ void* clientHandler(void* args) {
                                 rc = sqlite3_step(insertMessageStmt);
                                 if (rc == SQLITE_DONE)
                                 {
-                                    // The SQL statement has executed successfully
-
-                                    // Get the last inserted row ID (message ID)
                                     int messageId = sqlite3_last_insert_rowid(db);
-
-                                    // Convert the integer to a string and copy it to the receivedPacket.message.id field
                                     sprintf(receivedPacket.message.id, "%d", messageId);
                                     printf("inserted: %s\n", receivedPacket.message.id);
                                     pthread_mutex_lock(&connectionListMutex);
-                                    // If the receiver is currently connected, send the message via a Packet
+                                    // if the receiver is currently connected, send MESSAGE_NOTIFICATION
                                     int found = -1;
                                     for (int j = 0; j < MAX_CLIENTS; j++)
                                     {
@@ -454,32 +439,21 @@ void* clientHandler(void* args) {
                                     rc = sqlite3_prepare_v2(db, getTimeQuery, -1, &getTimeStmt, NULL);
                                     handleDbError(rc, "Failed to prepare SQL statement for getting current timestamp");
 
-                                    // Execute the query to get the current timestamp
                                     rc = sqlite3_step(getTimeStmt);
 
-                                    // Check if the query was successful
                                     if (rc == SQLITE_ROW)
                                     {
-                                        // Retrieve the timestamp from the result
                                         const char *currentTimestamp = (const char *)sqlite3_column_text(getTimeStmt, 0);
 
-                                        // Now, 'currentTimestamp' contains the current timestamp
-                                        printf("Current Timestamp: %s\n", currentTimestamp);
                                         strcpy(destPacket.message.timeStamp, currentTimestamp);
                                         unsigned char buffer[sizeof(Packet)];
                                         encode_vigenere_packet(&destPacket, vigenere_key);
                                         serializePacket(&destPacket, buffer, sizeof(buffer));
                                         send(clientSocket, buffer, sizeof(buffer), 0);
                                         decode_vigenere_packet(&destPacket, vigenere_key);
-                                        // You can store 'currentTimestamp' in a variable or use it as needed
                                     }
                                     else
-                                    {
-                                        // Handle the case where the query did not return a row
                                         printf("Failed to retrieve current timestamp.\n");
-                                    }
-
-                                    // Finalize the statement
                                     sqlite3_finalize(getTimeStmt);
                                     
                                     if (found != -1)
@@ -492,7 +466,7 @@ void* clientHandler(void* args) {
                                         decode_vigenere_packet(&destPacket, vigenere_key);
                                     }
                                     pthread_mutex_unlock(&connectionListMutex);
-                                    // Send SEND_MESSAGE_RESPONSE SUCCESS
+                                    // send SEND_MESSAGE_RESPONSE SUCCESS
                                     Packet responsePacket;
                                     responsePacket.type = SEND_MESSAGE_RESPONSE;
                                     responsePacket.error = SUCCESS;
@@ -502,11 +476,7 @@ void* clientHandler(void* args) {
                                     send(clientSocket, buffer, sizeof(buffer), 0);
                                 }
                                 else
-                                {
-                                    // Handle the case where an error occurred during execution
                                     printf("Failed to insert message into the database.\n");
-                                }
-
                                 sqlite3_finalize(insertMessageStmt);
                             }
                         }
@@ -517,7 +487,6 @@ void* clientHandler(void* args) {
                 case VIEW_ALL_CONVOS: {
                     printf("view_all_convos received!\n");
                     pthread_mutex_lock(&connectionListMutex);
-                    // Check if the sender is logged in
                     if (strcmp(connectionList[connectionIndex].username, "") == 0)
                     {
                         Packet responsePacket;
@@ -532,7 +501,7 @@ void* clientHandler(void* args) {
                     {
                         strcpy(connectionList[connectionIndex].viewingConvo, "");
                         connectionList[connectionIndex].currentView = MAIN_VIEW;
-                        // Select all unique participants where the current user is either the sender or receiver
+                        // select all unique users where the current user is either the sender or receiver
                         const char *selectParticipantsQuery = "SELECT DISTINCT participant FROM ("
                                                             "    SELECT sender AS participant FROM Messages WHERE receiver = ?"
                                                             "    UNION"
@@ -549,7 +518,6 @@ void* clientHandler(void* args) {
                         rc = sqlite3_bind_text(selectParticipantsStmt, 2, connectionList[connectionIndex].username, -1, SQLITE_STATIC);
                         handleDbError(rc, "Failed to bind username parameter for selecting participants");
 
-                        // Iterate over the results and send each participant through VIEW_ALL_CONVOS_RESPONSE packet
                         while ((rc = sqlite3_step(selectParticipantsStmt)) == SQLITE_ROW)
                         {
                             const char *participant = (const char *)sqlite3_column_text(selectParticipantsStmt, 0);
@@ -571,7 +539,6 @@ void* clientHandler(void* args) {
                 case VIEW_CONVERSATION: {
                     printf("view_convo received!\n");
                     pthread_mutex_lock(&connectionListMutex);
-                    // Check if the user is logged in
                     if (strcmp(connectionList[connectionIndex].username, "") == 0)
                     {
                         Packet responsePacket;
@@ -584,7 +551,7 @@ void* clientHandler(void* args) {
                     }
                     else
                     {
-                        // Check if the provided username is in the Users table
+                        // check if user in table
                         const char *checkUserQuery = "SELECT COUNT(*) FROM Users WHERE username = ?;";
                         sqlite3_stmt *checkUserStmt;
 
@@ -602,7 +569,7 @@ void* clientHandler(void* args) {
                         }
                         sqlite3_finalize(checkUserStmt);
 
-                        // If the provided username does not exist, send VIEW_CONVERSATION_RESPONSE INVALID_USER_DATA
+                        // if not, send VIEW_CONVERSATION_RESPONSE INVALID_USER_DATA
                         if (userCount == 0)
                         {
                             Packet responsePacket;
@@ -617,7 +584,7 @@ void* clientHandler(void* args) {
                         {
                             connectionList[connectionIndex].currentView = CONVERSATION_VIEW;
                             strcpy(connectionList[connectionIndex].viewingConvo, receivedPacket.user.username);
-                            // Retrieve all messages exchanged between the two users
+                            // get all messages from that convo
                             const char *selectMessagesQuery = "SELECT id, sender, receiver, content, timeStamp FROM Messages WHERE "
                                                             "(sender = ? AND receiver = ?) OR (sender = ? AND receiver = ?) ORDER BY timeStamp;";
                             sqlite3_stmt *selectMessagesStmt;
@@ -637,7 +604,7 @@ void* clientHandler(void* args) {
                             rc = sqlite3_bind_text(selectMessagesStmt, 4, connectionList[connectionIndex].username, -1, SQLITE_STATIC);
                             handleDbError(rc, "Failed to bind receiver parameter for selecting messages");
 
-                            // Iterate over the results and send each message through VIEW_CONVERSATION_RESPONSE packet
+                            // each message is sent through one packet
                             while ((rc = sqlite3_step(selectMessagesStmt)) == SQLITE_ROW)
                             {
                                 const char *id = (const char *)sqlite3_column_text(selectMessagesStmt, 0);
