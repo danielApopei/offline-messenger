@@ -36,19 +36,19 @@ void initializeConnectionList() {
     }
 }
 
-void printConnectionList()
-{
-    pthread_mutex_lock(&connectionListMutex);
-    printf("list: ");
-    for (int i = 0; i < MAX_CLIENTS; i++)
-    {
-        if (connectionList[i].sd != -1) {
-            printf("(%d, %d, %s) ", i, connectionList[i].sd, connectionList[i].username);
-        }
-    }
-    printf("\n");
-    pthread_mutex_unlock(&connectionListMutex);
-}
+// void printConnectionList()
+// {
+//     pthread_mutex_lock(&connectionListMutex);
+//     printf("list: ");
+//     for (int i = 0; i < MAX_CLIENTS; i++)
+//     {
+//         if (connectionList[i].sd != -1) {
+//             printf("(%d, %d, %s) ", i, connectionList[i].sd, connectionList[i].username);
+//         }
+//     }
+//     printf("\n");
+//     pthread_mutex_unlock(&connectionListMutex);
+// }
 
 void handleDbError(int rc, const char *errorMsg)
 {
@@ -65,7 +65,7 @@ void* clientHandler(void* args) {
     int connectionIndex = arguments[1];
     free(args);
     while(1) {
-        printConnectionList();
+        // printConnectionList();
         Packet receivedPacket;
         unsigned char receivedBuffer[sizeof(Packet)];
         ssize_t totalBytesReceived = 0;
@@ -82,8 +82,6 @@ void* clientHandler(void* args) {
         if (bytesReceived > 0) {
             switch(receivedPacket.type) {
                 case REGISTER: {
-                    printf("register received!\n");
-
                     // check if user already exists
                     const char *checkUserQuery = "SELECT COUNT(*) FROM Users WHERE username = ?;";
                     sqlite3_stmt *checkUserStmt;
@@ -157,8 +155,6 @@ void* clientHandler(void* args) {
                     break;
                 }
                 case LOGIN: {
-                    printf("login received!\n");
-
                     // check if username and password combination exists in the database
                     const char *checkLoginQuery = "SELECT COUNT(*) FROM Users WHERE username = ? AND password = ?;";
                     sqlite3_stmt *checkLoginStmt;
@@ -230,7 +226,6 @@ void* clientHandler(void* args) {
                         connectionList[connectionIndex].currentView = MAIN_VIEW;
                         strcpy(connectionList[connectionIndex].username, receivedPacket.user.username);
                         strcpy(responsePacket.user.username, connectionList[connectionIndex].username);
-                        printf("sending welcome: [%s]", responsePacket.user.username);
                         pthread_mutex_unlock(&connectionListMutex);
                         unsigned char buffer[sizeof(Packet)];
                         encode_vigenere_packet(&responsePacket, vigenere_key);
@@ -240,7 +235,6 @@ void* clientHandler(void* args) {
                     break;
                 }
                 case LOGOUT: {
-                    printf("logout received!\n");
                     if (strcmp(connectionList[connectionIndex].username, "") == 0)
                     {
                         // user is not logged in, send error through Packet
@@ -271,7 +265,6 @@ void* clientHandler(void* args) {
                 }
                 case SEND_MESSAGE: {
                     int okToAdd = 1;
-                    printf("send_message received!\n");
                     char replyContent[CONTENT_LENGTH];
                     memset(replyContent, 0, sizeof(replyContent));
                     pthread_mutex_lock(&connectionListMutex);
@@ -413,7 +406,6 @@ void* clientHandler(void* args) {
                                 {
                                     int messageId = sqlite3_last_insert_rowid(db);
                                     sprintf(receivedPacket.message.id, "%d", messageId);
-                                    printf("inserted: %s\n", receivedPacket.message.id);
                                     pthread_mutex_lock(&connectionListMutex);
                                     // if the receiver is currently connected, send MESSAGE_NOTIFICATION
                                     int found = -1;
@@ -485,7 +477,6 @@ void* clientHandler(void* args) {
                     break;
                 }
                 case VIEW_ALL_CONVOS: {
-                    printf("view_all_convos received!\n");
                     pthread_mutex_lock(&connectionListMutex);
                     if (strcmp(connectionList[connectionIndex].username, "") == 0)
                     {
@@ -537,7 +528,6 @@ void* clientHandler(void* args) {
                     break;
                 }
                 case VIEW_CONVERSATION: {
-                    printf("view_convo received!\n");
                     pthread_mutex_lock(&connectionListMutex);
                     if (strcmp(connectionList[connectionIndex].username, "") == 0)
                     {
@@ -648,7 +638,6 @@ void* clientHandler(void* args) {
         } else if (bytesReceived <= 0) {
             // client closed connection
             pthread_mutex_lock(&connectionListMutex);
-            printf("client from index [%d] = %d (%s) disconnected!\n",connectionIndex, connectionList[connectionIndex].sd, connectionList[connectionIndex].username);
             close(clientSocket);
             connectionList[connectionIndex].sd = -1;
             strcpy(connectionList[connectionIndex].username, "");
