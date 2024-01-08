@@ -26,7 +26,6 @@ void* receiveThread(void* arg) {
         Packet receivedPacket;
         deserializePacket(receivedBuffer, &receivedPacket);
         decode_vigenere_packet(&receivedPacket, vigenere_key);
-        printf("type: %d; error: %d\n", receivedPacket.type, receivedPacket.error);
         if (totalBytesReceived > 0) {
             switch(receivedPacket.type) {
                 case REGISTER_RESPONSE: {

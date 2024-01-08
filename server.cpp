@@ -127,12 +127,16 @@ void* clientHandler(void* args) {
                         rc = sqlite3_prepare_v2(db, insertUserQuery, -1, &insertUserStmt, NULL);
                         handleDbError(rc, "Failed to prepare SQL statement for user registration");
 
+                        char encryptedUser[256];
+                        strcpy(encryptedUser, receivedPacket.user.username);
+                        encode_vigenere(encryptedUser, vigenere_key);
+
                         rc = sqlite3_bind_text(insertUserStmt, 1, receivedPacket.user.username, -1, SQLITE_STATIC);
                         handleDbError(rc, "Failed to bind username parameter for user registration");
                         // encoding pass before
                         char encryptedPass[256];
                         strcpy(encryptedPass, receivedPacket.user.password);
-                        encode_vigenere(encryptedPass, vigenere_key);
+                        encode_vigenere(encryptedPass, encryptedUser);
 
                         rc = sqlite3_bind_text(insertUserStmt, 2, encryptedPass, -1, SQLITE_STATIC);
                         handleDbError(rc, "Failed to bind password parameter for user registration");
@@ -167,12 +171,16 @@ void* clientHandler(void* args) {
                     int rc = sqlite3_prepare_v2(db, checkLoginQuery, -1, &checkLoginStmt, NULL);
                     handleDbError(rc, "Failed to prepare SQL statement for checking login");
 
+                    char encryptedUser[256];
+                    strcpy(encryptedUser, receivedPacket.user.username);
+                    encode_vigenere(encryptedUser, vigenere_key);
+
                     rc = sqlite3_bind_text(checkLoginStmt, 1, receivedPacket.user.username, -1, SQLITE_STATIC);
                     handleDbError(rc, "Failed to bind username parameter for checking login");
                     // encoding pass before
                     char encryptedPass[256];
                     strcpy(encryptedPass, receivedPacket.user.password);
-                    encode_vigenere(encryptedPass, vigenere_key);
+                    encode_vigenere(encryptedPass, encryptedUser);
                     rc = sqlite3_bind_text(checkLoginStmt, 2, encryptedPass, -1, SQLITE_STATIC);
                     handleDbError(rc, "Failed to bind password parameter for checking login");
 
