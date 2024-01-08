@@ -72,10 +72,6 @@ struct Connection {
 }; // server will manage an array of type Connection through which it will know how many clients are connected and with what users
 
 void serializePacket(const Packet *packet, unsigned char *buffer, size_t bufferSize) {
-    if (bufferSize < sizeof(Packet)) {
-        // Handle error: buffer too small
-        return;
-    }
     memcpy(buffer, packet, sizeof(Packet));
 }
 
@@ -84,13 +80,6 @@ void deserializePacket(const unsigned char *buffer, Packet *packet) {
 }
 
 const char *key = "tenacity"; // should be the same on both client and server
-
-void xorEncryptDecrypt(unsigned char *data, int data_len, const char* key) {
-    size_t key_len = strlen(key);
-    for (size_t i = 0; i < data_len; i++) {
-        data[i] ^= key[i % key_len];
-    }
-}
 
 void encode_vigenere(char* plain_text, char* key)
 {
@@ -149,3 +138,49 @@ void decode_vigenere(char* plain_text, char* key)
 }
 
 char vigenere_key[256] = "tenacity\0";
+
+void encode_vigenere_packet(Packet* P, char* key)
+{
+    unsigned char buffer[sizeof(Packet)];
+    serializePacket(P, buffer, sizeof(buffer));
+    // unsigned char encrypted_text[256];
+    int text_length = sizeof(Packet);
+    int key_length = strlen(key);
+    for(int i=0;i<text_length;i++)
+    {
+        int rez = (int)(buffer[i]) + (int)(key[i%key_length]);
+        rez = rez % 256;
+        int poz = i % key_length;
+        int init = buffer[i];
+        int another = key[poz];
+        init += another;
+        init = init % 256;
+        char ch = (char)(init);
+        buffer[i] = ch;
+    }
+    deserializePacket(buffer, P);
+}
+
+void decode_vigenere_packet(Packet *P, char* key)
+{
+    unsigned char buffer[sizeof(Packet)];
+    serializePacket(P, buffer, sizeof(buffer));
+    // unsigned char encrypted_text[256];
+    int text_length = sizeof(Packet);
+    int key_length = strlen(key);
+    for(int i=0;i<text_length;i++)
+    {
+        int rez = (int)(buffer[i]) - (int)(key[i%key_length]);
+        rez = rez % 256;
+            int poz = i % key_length;
+            int init = buffer[i];
+            int another = key[poz];
+            init -= another;
+            while(init<0)
+                init+=256;
+            init = init % 256;
+            char ch = (char)(init);
+            buffer[i] = ch;
+    }
+    deserializePacket(buffer, P);
+}

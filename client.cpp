@@ -19,15 +19,14 @@ void* receiveThread(void* arg) {
         while (totalBytesReceived < sizeof(Packet)) {
             bytesReceived = recv(clientSocket, receivedBuffer + totalBytesReceived, sizeof(receivedBuffer) - totalBytesReceived, 0);
             if (bytesReceived <= 0) {
-                // Handle error or closed connection
                 break;
             }
             totalBytesReceived += bytesReceived;
         }
-        xorEncryptDecrypt(receivedBuffer, sizeof(receivedBuffer), key);
         Packet receivedPacket;
         deserializePacket(receivedBuffer, &receivedPacket);
-
+        decode_vigenere_packet(&receivedPacket, vigenere_key);
+        printf("type: %d; error: %d\n", receivedPacket.type, receivedPacket.error);
         if (totalBytesReceived > 0) {
             switch(receivedPacket.type) {
                 case REGISTER_RESPONSE: {
@@ -203,8 +202,8 @@ void* userInputThread(void* arg) {
         if(okToSend)
         {
             unsigned char buffer[sizeof(Packet)];
+            encode_vigenere_packet(&P, vigenere_key);
             serializePacket(&P, buffer, sizeof(buffer));
-            xorEncryptDecrypt(buffer, sizeof(buffer), key);
             send(clientSocket, buffer, sizeof(buffer), 0);
         }
     }
