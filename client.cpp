@@ -6,8 +6,6 @@
 #include <string.h>
 #include <arpa/inet.h>
 
-#define SERVER_IP "127.0.0.1"
-#define SERVER_PORT 2024
 #define MAX_WORDS 32
 
 void* receiveThread(void* arg) {
@@ -209,16 +207,18 @@ void* userInputThread(void* arg) {
     pthread_exit(NULL);
 }
 
-int main() {
+int main(int argc, char *argv[]) {
+    if (argc != 3)
+    {
+        printf("Syntax: %s <adress> <port>\n", argv[0]);
+        return -1;
+    }
+    int port = port = atoi(argv[2]);
     int clientSocket = socket(AF_INET, SOCK_STREAM, 0);
     struct sockaddr_in serverAddress;
     serverAddress.sin_family = AF_INET;
-    serverAddress.sin_port = htons(SERVER_PORT);
-    if (inet_pton(AF_INET, SERVER_IP, &serverAddress.sin_addr) <= 0) {
-        perror("invalid address!\n");
-        close(clientSocket);
-        exit(1);
-    }
+    serverAddress.sin_addr.s_addr = inet_addr(argv[1]);
+    serverAddress.sin_port = htons(port);
     
     if (connect(clientSocket, (struct sockaddr*)&serverAddress, sizeof(serverAddress)) == -1) {
         perror("error connecting to the server!\n");
